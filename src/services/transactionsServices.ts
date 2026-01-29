@@ -69,43 +69,62 @@ export const TransactionsService = {
     });
     if (!agencyPersonal) throw new Error("Personal non lié à l'agence");
 
-    // 🔒 Débit optimiste
-    wallet.balance -= amount;
-    await walletRepo.save(wallet);
+    // 🔒 Transaction DB
+    const queryRunner = AppDataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const secret = wallet.secretCode?.toString() ?? "0000";
-    const network = wallet.network.name.toLowerCase();
-    let ussdCode: string | undefined;
+    try {
+      // Débit optimiste
+      wallet.balance -= amount;
+      await queryRunner.manager.save(wallet);
 
-    if (network === "yas") ussdCode = `*145*1*${amount}*${clientPhone}*${secret}#`;
-    else if (network === "moov africa") ussdCode = `*152*1*1*${clientPhone}*${amount}*${secret}#`;
+      const secret = wallet.secretCode?.toString() ?? "0000";
+      const network = wallet.network.name.toLowerCase();
 
-    // Création transaction
-    const transaction = transactionRepo.create({
-      wallet,
-      agency_personal: agencyPersonal,
-      type: "deposit",
-      amount,
-      clientPhone,
-      clientName,
-      status: "pending",
-      ussdCode,
-    });
-    await transactionRepo.save(transaction);
+      let ussdCode = network === "yas" ? `*145*1*${amount}*${clientPhone}*${secret}#` : `*152*1*1*${clientPhone}*${amount}*${secret}#`;
 
-    // Création dépôt lié
-    const deposit = depositRepo.create({
-      wallet,
-      agency_personal: agencyPersonal,
-      transaction,
-      amount,
-      clientPhone,
-      clientName,
-      status: "pending",
-    });
-    await depositRepo.save(deposit);
+      // Création transaction
+      const transaction = queryRunner.manager.create(Transaction, {
+        wallet,
+        agency_personal: agencyPersonal,
+        type: "deposit",
+        amount,
+        clientPhone,
+        clientName,
+        status: "pending",
+        ussdCode,
+      });
+      await queryRunner.manager.save(transaction);
 
-    return { transaction, deposit, wallet };
+      if(!transaction.transaction_id){
+        throw new Error("Erreur lors de la création de la transaction");
+      }
+
+      // Création dépôt lié
+      const deposit = queryRunner.manager.create(Deposit, {
+        wallet,
+        agency_personal: agencyPersonal,
+        transaction,
+        amount,
+        clientPhone,
+        clientName,
+        status: "pending",
+      });
+      await queryRunner.manager.save(deposit);
+
+      if(!deposit.deposit_id){
+        throw new Error("Erreur lors de la création du dépôt");
+      }
+
+      await queryRunner.commitTransaction();
+      return { transaction, deposit, wallet };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   },
 
   // ================================
@@ -142,43 +161,56 @@ export const TransactionsService = {
     });
     if (!agencyPersonal) throw new Error("Personal non lié à l'agence");
 
-    // 🔒 Crédit optimiste
-    wallet.balance += amount;
-    await walletRepo.save(wallet);
+    // 🔒 Transaction DB
+    const queryRunner = AppDataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const secret = wallet.secretCode?.toString() ?? "0000";
-    const network = wallet.network.name.toLowerCase();
-    let ussdCode: string | undefined;
+    try {
+      // Crédit optimiste
+      wallet.balance += amount;
+      await queryRunner.manager.save(wallet);
 
-    if (network === "moov africa") ussdCode = `*152*2*1*${clientPhone}*${amount}*${secret}#`;
-    else if (network === "yas") ussdCode = `YAS-RETRAIT: ${clientPhone} / ${amount} / ${secret}`;
+      const secret = wallet.secretCode?.toString() ?? "0000";
+      const network = wallet.network.name.toLowerCase();
+      let ussdCode: string | undefined;
 
-    // Création transaction
-    const transaction = transactionRepo.create({
-      wallet,
-      agency_personal: agencyPersonal,
-      type: "withdraw",
-      amount,
-      clientPhone,
-      clientName,
-      status: "pending",
-      ussdCode,
-    });
-    await transactionRepo.save(transaction);
+      if (network === "moov africa") ussdCode = `*152*2*1*${clientPhone}*${amount}*${secret}#`;
+      else if (network === "yas") ussdCode = `YAS-RETRAIT: ${clientPhone} / ${amount} / ${secret}`;
 
-    // Création retrait lié
-    const withdraw = withdrawRepo.create({
-      wallet,
-      agency_personal: agencyPersonal,
-      transaction,
-      amount,
-      clientPhone,
-      clientName,
-      status: "pending",
-    });
-    await withdrawRepo.save(withdraw);
+      // Création transaction
+      const transaction = queryRunner.manager.create(Transaction, {
+        wallet,
+        agency_personal: agencyPersonal,
+        type: "withdraw",
+        amount,
+        clientPhone,
+        clientName,
+        status: "pending",
+        ussdCode,
+      });
+      await queryRunner.manager.save(transaction);
 
-    return { transaction, withdraw, wallet };
+      // Création retrait lié
+      const withdraw = queryRunner.manager.create(Withdraw, {
+        wallet,
+        agency_personal: agencyPersonal,
+        transaction,
+        amount,
+        clientPhone,
+        clientName,
+        status: "pending",
+      });
+      await queryRunner.manager.save(withdraw);
+
+      await queryRunner.commitTransaction();
+      return { transaction, withdraw, wallet };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   },
 
   // ================================
@@ -207,26 +239,39 @@ export const TransactionsService = {
     if (wallet.agency.manager.manager_id !== manager.manager_id)
       throw new Error("Manager non autorisé");
 
-    // 🔒 Crédit optimiste
-    wallet.balance += amount;
-    if (secretCode !== undefined) wallet.secretCode = secretCode;
-    await walletRepo.save(wallet);
+    // 🔒 Transaction DB
+    const queryRunner = AppDataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const secret = wallet.secretCode?.toString() ?? "0000";
-    const ussdCode = `TOPUP-${wallet.network.name}-${amount}-${secret}`;
+    try {
+      // Crédit optimiste
+      wallet.balance += amount;
+      if (secretCode !== undefined) wallet.secretCode = secretCode;
+      await queryRunner.manager.save(wallet);
 
-    const transaction = transactionRepo.create({
-      wallet,
-      amount,
-      type: "topup",
-      status: "pending",
-      clientPhone: "N/A",
-      clientName: "Manager",
-      ussdCode,
-    });
-    await transactionRepo.save(transaction);
+      const secret = wallet.secretCode?.toString() ?? "0000";
+      const ussdCode = `TOPUP-${wallet.network.name}-${amount}-${secret}`;
 
-    return { transaction, wallet };
+      const transaction = queryRunner.manager.create(Transaction, {
+        wallet,
+        amount,
+        type: "topup",
+        status: "pending",
+        clientPhone: "N/A",
+        clientName: "Manager",
+        ussdCode,
+      });
+      await queryRunner.manager.save(transaction);
+
+      await queryRunner.commitTransaction();
+      return { transaction, wallet };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   },
 
   // ================================
@@ -245,31 +290,44 @@ export const TransactionsService = {
     if (!transaction) throw new Error("Transaction introuvable");
     if (transaction.status !== "pending") throw new Error("Transaction déjà confirmée");
 
-    transaction.status = status;
+    // 🔒 Transaction DB
+    const queryRunner = AppDataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // Gestion selon type
-    if (transaction.type === "deposit" && transaction.deposit) {
-      transaction.deposit.status = status;
-      if (status === "failed") {
-        transaction.wallet.balance += transaction.amount;
-        await walletRepo.save(transaction.wallet);
+    try {
+      transaction.status = status;
+
+      // Gestion selon type
+      if (transaction.type === "deposit" && transaction.deposit) {
+        transaction.deposit.status = status;
+        if (status === "failed") {
+          transaction.wallet.balance += transaction.amount;
+          await queryRunner.manager.save(transaction.wallet);
+        }
+        await queryRunner.manager.save(transaction.deposit);
       }
-      await AppDataSource.getRepository(Deposit).save(transaction.deposit);
-    }
 
-    if (transaction.type === "withdraw" && transaction.withdraw) {
-      transaction.withdraw.status = status;
-      if (status === "failed") {
-        transaction.wallet.balance -= transaction.amount;
-        await walletRepo.save(transaction.wallet);
+      if (transaction.type === "withdraw" && transaction.withdraw) {
+        transaction.withdraw.status = status;
+        if (status === "failed") {
+          transaction.wallet.balance -= transaction.amount;
+          await queryRunner.manager.save(transaction.wallet);
+        }
+        await queryRunner.manager.save(transaction.withdraw);
       }
-      await AppDataSource.getRepository(Withdraw).save(transaction.withdraw);
+
+      // TOPUP pas de rollback
+      await queryRunner.manager.save(transaction);
+
+      await queryRunner.commitTransaction();
+      return { transaction, wallet: transaction.wallet };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    // TOPUP pas de rollback
-    await transactionRepo.save(transaction);
-
-    return { transaction, wallet: transaction.wallet };
   },
 
   // ================================
@@ -287,19 +345,48 @@ export const TransactionsService = {
   // ================================
   // 🔹 HISTORIQUE DU PERSONAL
   // ================================
-  async getPersonalTransactions(user: AuthUser) {
-    if (user.role !== "personal") throw new Error("Seul un personal peut consulter son historique");
-
-    const personalRepo = AppDataSource.getRepository(Personal);
-    const transactionRepo = AppDataSource.getRepository(Transaction);
-
-    const personal = await personalRepo.findOne({ where: { user: { user_id: user.id } } });
+  async getPersonalTransactions( 
+    user: AuthUser, 
+    page: number = 1, 
+    limit: number = 10, 
+    type?: string, 
+    network?: string 
+  ) { 
+    if (user.role !== "personal") { 
+      throw new Error("Seul un personal peut consulter son historique"); 
+    } 
+    const personalRepo = AppDataSource.getRepository(Personal); 
+    const transactionRepo = AppDataSource.getRepository(Transaction); 
+    
+    const personal = await personalRepo.findOne({ 
+      where: { user: { user_id: user.id } }, 
+    });
     if (!personal) throw new Error("Personal introuvable");
 
-    return transactionRepo.find({
-      where: { agency_personal: { personal: { personal_id: personal.personal_id } } },
-      relations: ["wallet", "deposit", "withdraw"],
-      order: { created_at: "DESC" },
-    });
-  },
+    const skip = (page - 1) * limit; 
+    
+    const query = transactionRepo
+  .createQueryBuilder("transaction")
+  .leftJoinAndSelect("transaction.wallet", "wallet")
+  .leftJoinAndSelect("wallet.network", "network") // 🔹 récupérer le réseau
+  .leftJoinAndSelect("transaction.deposit", "deposit")
+  .leftJoinAndSelect("transaction.withdraw", "withdraw")
+  .leftJoin("transaction.agency_personal", "agency_personal")
+  .leftJoin("agency_personal.personal", "personal")
+  .where("personal.personal_id = :personalId", { personalId: personal.personal_id })
+  .orderBy("transaction.created_at", "DESC")
+  .skip(skip)
+  .take(limit);
+ 
+    
+  if (type) { 
+    query.andWhere("transaction.type = :type", { type }); 
+  } 
+  
+  if (network) { 
+    query.andWhere("network.name = :network", { network }); 
+  } 
+  
+  const [transactions, total] = await query.getManyAndCount(); 
+  return { total, page, limit, transactions, }; }
 };

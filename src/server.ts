@@ -16,6 +16,7 @@ import managerAgenciesRoutes from "./routes/manager/agencies";
 import managerPersonalsRoutes from "./routes/manager/personals";
 import managerWalletsRoutes from "./routes/manager/wallets"; // ✅ ajouté
 import WalletsController from "./routes/personal/wallets";
+import StatsController from "./routes/personal/stats";
 
 // --- Personal routes
 import personalTransactionsRoutes from "./routes/personal/transactions"; // ✅ ajouté
@@ -52,6 +53,7 @@ AppDataSource.initialize()
     // --- Personal
     app.use("/personal/transactions", personalTransactionsRoutes); // ✅ nouveau
     app.use("/personal/wallets", WalletsController); // ✅ nouveau
+    app.use("/personal/stats", StatsController); // ✅ nouveau
     //app.use("/personal/transactions", PersonalTransactionsController);
 
     // ✅ Lancement du serveur

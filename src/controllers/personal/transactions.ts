@@ -89,18 +89,29 @@ export const PersonalTransactionsController = {
   // 🔹 HISTORIQUE
   // ============================
   async history(req: AuthRequest, res: Response) {
-    try {
-      const user = req.user;
-      if (!user) {
-        return res.status(401).json({ error: "Utilisateur non authentifié" });
-      }
-
-      const data = await TransactionsService.getPersonalTransactions(user);
-      return res.status(200).json(data);
-    } catch (error: any) {
-      return res.status(400).json({ error: error.message });
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: "Utilisateur non authentifié" });
     }
-  },
+
+    // 🔹 Récupération des paramètres de pagination et filtres
+    const { page = "1", limit = "10", type, network } = req.query;
+
+    const data = await TransactionsService.getPersonalTransactions(
+      user,
+      parseInt(page as string, 10),
+      parseInt(limit as string, 10),
+      type as string | undefined,
+      network as string | undefined
+    );
+
+    return res.status(200).json(data);
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message });
+  }
+}
+,
 
   // ============================
   // 🔹 CONFIRMATION TRANSACTION
