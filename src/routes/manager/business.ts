@@ -30,6 +30,8 @@ router.get(
   wrapAuth(BusinessController.getAll)
 );
 
+router.get( "/mine", authMiddleware, requireRole(["manager"]), wrapAuth(BusinessController.getMine) );
+
 router.get(
   "/:id",
   authMiddleware,

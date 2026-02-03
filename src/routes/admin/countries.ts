@@ -24,7 +24,7 @@ router.post(
 router.get(
   "/",
   authMiddleware,
-  requireRole(["admin" as UserRole]),
+  requireRole(["admin", "manager"]),
   CountryController.getAll
 );
 

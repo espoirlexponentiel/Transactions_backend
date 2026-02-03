@@ -71,6 +71,23 @@ export const PersonalsController = {
     }
   },
 
+  // ✅ Récupérer tous les Personals du manager connecté
+  async getByManager(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Utilisateur non authentifié" });
+      }
+
+      const personals = await PersonalsService.getPersonalsByManager(
+        req.user.id // 🔐 user_id depuis le token
+      );
+
+      return res.json(personals);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  },
+
   // ✅ Retirer un Personal d’une Agency (manager propriétaire)
   async unassign(req: AuthRequest<UnassignBody>, res: Response) {
     try {

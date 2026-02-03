@@ -43,6 +43,8 @@ router.get(
   }
 );
 
+
+router.get("/precision", authMiddleware, PersonalsController.getByManager); // 🔹 nouvelle route
 // ✅ Retirer un Personal d’une Agency
 router.delete(
   "/unassign",

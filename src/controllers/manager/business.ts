@@ -22,8 +22,6 @@ export const BusinessController = {
       if (!req.user) return res.status(401).json({ error: "Utilisateur non authentifié" });
 
       const { name } = req.body;
-
-      // ✅ Utilise le manager connecté via req.user.id
       const business = await BusinessService.createBusiness(name, req.user.id);
       res.status(201).json(business);
     } catch (err: any) {
@@ -35,6 +33,18 @@ export const BusinessController = {
   async getAll(req: AuthRequest, res: Response) {
     const businesses = await BusinessService.getAllBusinesses();
     res.json(businesses);
+  },
+
+  // ✅ Récupérer les business du manager connecté
+  async getMine(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Utilisateur non authentifié" });
+
+      const businesses = await BusinessService.getBusinessesByManager(req.user.id);
+      res.json(businesses);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
   },
 
   // ✅ Récupérer un business par ID

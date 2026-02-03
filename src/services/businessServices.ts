@@ -78,4 +78,27 @@ export const BusinessService = {
     await businessRepo.remove(business);
     return { message: "Business supprimé" };
   },
+
+  /**
+ * Récupérer les business du manager connecté
+ */
+async getBusinessesByManager(userId: number) {
+  const managerRepo = AppDataSource.getRepository(Manager);
+  const businessRepo = AppDataSource.getRepository(Business);
+
+  // 🔹 Vérifier que le manager existe via son user_id
+  const manager = await managerRepo.findOne({
+    where: { user: { user_id: userId } },
+    relations: ["user"],
+  });
+  if (!manager) throw new Error("Manager introuvable");
+
+  // 🔹 Récupérer les businesses liés à ce manager
+  return businessRepo.find({
+    where: { manager: { manager_id: manager.manager_id } },
+    relations: ["manager", "agencies"],
+    order: { business_id: "ASC" },
+  });
+}
+
 };

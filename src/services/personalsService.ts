@@ -117,4 +117,34 @@ export const PersonalsService = {
     await repo.remove(relation);
     return { message: "Affectation supprimée" };
   },
+
+  // ✅ Récupérer tous les personals du manager connecté
+async getPersonalsByManager(managerUserId: number) {
+  const personalRepo = AppDataSource.getRepository(Personal);
+
+  // 🔹 Vérifier que le manager existe
+  const manager = await AppDataSource.getRepository(Manager).findOne({
+    where: { user: { user_id: managerUserId } },
+    relations: ["user"],
+  });
+  if (!manager) {
+    throw new Error("Manager introuvable");
+  }
+
+  // 🔹 Récupérer tous les personals liés à ce manager
+  return personalRepo.find({
+  where: { manager: { manager_id: manager.manager_id } },
+  relations: [
+    "user",
+    "manager",
+    "manager.user",
+    "agencyPersonals",
+    "agencyPersonals.agency",
+    "agencyPersonals.agency.business"
+  ],
+  order: { personal_id: "ASC" },
+});
+
+}
+
 };
