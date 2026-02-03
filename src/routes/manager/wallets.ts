@@ -27,4 +27,8 @@ router.post(
   wrapAuth<TopupBody>(ManagerWalletsController.topup)
 );
 
+router.get( "/mine", authMiddleware, requireRole(["manager"]), ManagerWalletsController.getMine );
+
+// ✅ Voir les topups par agence et par jour 
+router.get( "/topups", authMiddleware, requireRole(["manager"]), ManagerWalletsController.list );
 export default router;
