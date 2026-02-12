@@ -18,6 +18,7 @@ import managerWalletsRoutes from "./routes/manager/wallets"; // ✅ ajouté
 import WalletsController from "./routes/personal/wallets";
 import StatsController from "./routes/personal/stats";
 import ManagerStatsController from "./routes/manager/reports";
+import PersonalTopupController from "./routes/personal/topup"; // ✅ ajouté
 
 // --- Personal routes
 import personalTransactionsRoutes from "./routes/personal/transactions"; // ✅ ajouté
@@ -56,6 +57,7 @@ AppDataSource.initialize()
     app.use("/personal/transactions", personalTransactionsRoutes); // ✅ nouveau
     app.use("/personal/wallets", WalletsController); // ✅ nouveau
     app.use("/personal/stats", StatsController); // ✅ nouveau
+    app.use("/personal/topup", PersonalTopupController); // ✅ nouveau
     //app.use("/personal/transactions", PersonalTransactionsController);
 
     // ✅ Lancement du serveur

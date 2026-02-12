@@ -33,6 +33,7 @@ export class StatsService {
       where: {
         agency_personal: { personal: { personal_id: personal.personal_id } },
         created_at: Between(startOfDay, endOfDay),
+        status: "success",
       },
       relations: ["wallet", "wallet.network"],
     });

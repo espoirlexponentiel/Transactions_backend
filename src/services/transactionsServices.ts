@@ -216,63 +216,94 @@ export const TransactionsService = {
   // ================================
   // 🔹 TOPUP (manager → wallet)
   // ================================
-  async createTopup(payload: TopupPayload, user: AuthUser) {
-    if (user.role !== "manager") throw new Error("Seul un manager peut effectuer un topup");
+ async createTopup(payload: TopupPayload, user: AuthUser) {
+  if (user.role !== "manager" && user.role !== "personal") {
+    throw new Error("Seul un manager ou un personal peut effectuer un topup");
+  }
 
-    const { walletId, amount, secretCode } = payload;
-    if (amount <= 0) throw new Error("Montant invalide");
+  const { walletId, amount, secretCode } = payload;
+  if (amount <= 0) throw new Error("Montant invalide");
 
-    const walletRepo = AppDataSource.getRepository(Wallet);
-    const transactionRepo = AppDataSource.getRepository(Transaction);
-    const managerRepo = AppDataSource.getRepository(Manager);
+  const walletRepo = AppDataSource.getRepository(Wallet);
+  const transactionRepo = AppDataSource.getRepository(Transaction);
+  const managerRepo = AppDataSource.getRepository(Manager);
+  const personalRepo = AppDataSource.getRepository(Personal);
+  const apRepo = AppDataSource.getRepository(AgencyPersonal);
 
-    const wallet = await walletRepo.findOne({
-      where: { wallet_id: walletId },
-      relations: ["agency", "agency.manager", "network"],
-    });
-    if (!wallet) throw new Error("Wallet introuvable");
+  const wallet = await walletRepo.findOne({
+    where: { wallet_id: walletId },
+    relations: ["agency", "agency.manager", "network"],
+  });
+  if (!wallet) throw new Error("Wallet introuvable");
 
+  let clientName = "";
+  let agencyPersonal: AgencyPersonal | null = null;
+
+  if (user.role === "manager") {
     const manager = await managerRepo.findOne({
       where: { user: { user_id: user.id } },
+      relations: ["user"],
     });
     if (!manager) throw new Error("Manager introuvable");
-    if (wallet.agency.manager.manager_id !== manager.manager_id)
+    if (wallet.agency.manager.manager_id !== manager.manager_id) {
       throw new Error("Manager non autorisé");
-
-    // 🔒 Transaction DB
-    const queryRunner = AppDataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      // Crédit optimiste
-      wallet.balance += amount;
-      if (secretCode !== undefined) wallet.secretCode = secretCode;
-      await queryRunner.manager.save(wallet);
-
-      const secret = wallet.secretCode?.toString() ?? "0000";
-      const ussdCode = `TOPUP-${wallet.network.name}-${amount}-${secret}`;
-
-      const transaction = queryRunner.manager.create(Transaction, {
-        wallet,
-        amount,
-        type: "topup",
-        status: "pending",
-        clientPhone: "N/A",
-        clientName: "Manager",
-        ussdCode,
-      });
-      await queryRunner.manager.save(transaction);
-
-      await queryRunner.commitTransaction();
-      return { transaction, wallet };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
     }
-  },
+    clientName = manager.user.firstName;
+  } else if (user.role === "personal") {
+    const personal = await personalRepo.findOne({
+      where: { user: { user_id: user.id } },
+      relations: ["user"],
+    });
+    if (!personal) throw new Error("Personal introuvable");
+
+    agencyPersonal = await apRepo.findOne({
+      where: {
+        personal: { personal_id: personal.personal_id },
+        agency: { agency_id: wallet.agency.agency_id },
+      },
+      relations: ["agency"],
+    });
+    if (!agencyPersonal) throw new Error("Personal non lié à l'agence");
+
+    clientName = personal.user.firstName;
+  }
+
+  const queryRunner = AppDataSource.createQueryRunner();
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
+
+  try {
+    wallet.balance += amount;
+    if (secretCode !== undefined) wallet.secretCode = secretCode;
+    await queryRunner.manager.save(wallet);
+
+    const secret = wallet.secretCode?.toString() ?? "0000";
+    const ussdCode = `TOPUP-${wallet.network.name}-${amount}-${secret}`;
+
+    const transaction = queryRunner.manager.create(Transaction, {
+      wallet,
+      amount,
+      type: "topup",
+      status: "success", // considéré comme réussi
+      clientPhone: "N/A",
+      clientName,
+      ussdCode,
+      agencyPersonalId: agencyPersonal?.id  ?? null, // 🔹 lien ajouté si personal
+    });
+    await queryRunner.manager.save(transaction);
+
+    await queryRunner.commitTransaction();
+    return { transaction, wallet };
+  } catch (error) {
+    await queryRunner.rollbackTransaction();
+    throw error;
+  } finally {
+    await queryRunner.release();
+  }
+},
+
+
+
 
   // ================================
   // 🔹 CONFIRM TRANSACTION
@@ -374,6 +405,7 @@ export const TransactionsService = {
   .leftJoin("transaction.agency_personal", "agency_personal")
   .leftJoin("agency_personal.personal", "personal")
   .where("personal.personal_id = :personalId", { personalId: personal.personal_id })
+  .andWhere("transaction.type IN (:...types)", { types: ["deposit", "withdraw"] })
   .orderBy("transaction.created_at", "DESC")
   .skip(skip)
   .take(limit);

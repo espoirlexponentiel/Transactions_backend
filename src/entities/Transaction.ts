@@ -25,6 +25,9 @@ export class Transaction {
   @Column({ type: "enum", enum: ["deposit", "withdraw", "topup"] })
   type!: "deposit" | "withdraw" | "topup";
 
+  @Column({ name: "agencyPersonalId", type: "int",  nullable: true })
+  agencyPersonalId: number | null | undefined;
+
   @Column({ type: "float" })
   amount!: number;
 

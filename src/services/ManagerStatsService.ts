@@ -33,6 +33,7 @@ export class ManagerStatsService {
       where: {
         wallet: { agency: { manager: { manager_id: manager.manager_id } } },
         created_at: Between(startOfDay, endOfDay),
+        status: "success",
       },
       relations: ["wallet", "wallet.agency", "wallet.network"],
     });
