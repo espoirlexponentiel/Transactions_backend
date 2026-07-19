@@ -35,33 +35,48 @@ export const AuthController = {
     }
   },
 
-  // 2️⃣ Connexion
-  async login(req: AuthRequest, res: Response) {
-    try {
-      const userRepo = AppDataSource.getRepository(User);
-      const { phone, password } = req.body;
+// 2️⃣ Connexion
+async login(req: AuthRequest, res: Response) {
+  try {
+    const userRepo = AppDataSource.getRepository(User);
+    const personalRepo = AppDataSource.getRepository(Personal);
+    const { phone, password } = req.body;
 
-      const user = await userRepo.findOne({ where: { phone } });
-      if (!user) {
-        return res.status(404).json({ error: "Utilisateur introuvable" });
-      }
+    const user = await userRepo.findOne({ where: { phone } });
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
 
-      const valid = await AuthService.comparePassword(password, user.password_hash);
-      if (!valid) {
-        return res.status(401).json({ error: "Mot de passe incorrect" });
-      }
+    const valid = await AuthService.comparePassword(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: "Mot de passe incorrect" });
+    }
 
-      const token = AuthService.generateToken({
-        id: user.user_id,
-        role: user.role,
-        name: user.firstName,
+    // 🔹 Si l'utilisateur est un "personal", on récupère son agence assignée
+    let agencyId: number | undefined = undefined;
+    if (user.role === "personal") {
+      const personal = await personalRepo.findOne({
+        where: { user: { user_id: user.user_id } },
+        relations: ["agencyPersonals", "agencyPersonals.agency"],
       });
 
-      return res.json({ token, role: user.role, name: user.firstName });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      if (personal && personal.agencyPersonals?.length > 0) {
+        agencyId = personal.agencyPersonals[0].agency.agency_id;
+      }
     }
-  },
+
+    const token = AuthService.generateToken({
+      id: user.user_id,
+      role: user.role,
+      name: user.firstName,
+      agencyId,
+    });
+
+    return res.json({ token, role: user.role, name: user.firstName, agencyId });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+},
 
   // 3️⃣ Création Manager par Admin
   async createManager(req: AuthRequest, res: Response) {
