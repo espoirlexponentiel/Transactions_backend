@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import express, { Request, Response } from "express";
+import cors from "cors";
 import { AppDataSource } from "./data-source";
 import { PORT } from "./config/env";
 
@@ -26,6 +27,9 @@ import personalTransactionsRoutes from "./routes/personal/transactions"; // ✅ 
 
 const app = express();
 
+app.use(cors());
+
+
 // ✅ Middlewares globaux
 app.use(express.json());
 
@@ -33,6 +37,8 @@ app.use(express.json());
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "OK", message: "API MobileMoney fonctionne 🚀" });
 });
+
+
 
 // ✅ Initialisation de la base de données
 AppDataSource.initialize()
