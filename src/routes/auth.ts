@@ -9,5 +9,6 @@ router.post("/signup-admin", AuthController.signupAdmin);
 router.post("/login", AuthController.login);
 router.post("/create-manager", authMiddleware, requireRole(["admin"]), AuthController.createManager);
 router.post("/create-agent", authMiddleware, requireRole(["manager"]), AuthController.createAgent);
+router.post("/signup", AuthController.signup);
 
 export default router;
