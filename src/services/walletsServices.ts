@@ -28,6 +28,54 @@ export const WalletsService = {
   },
 
   /**
+ * Réinitialiser un seul wallet à 0 (par son ID)
+ * Autorisé pour : le manager propriétaire de l'agence, ou un personal qui y est affecté
+ */
+async resetWalletById(walletId: number, userId: number, role: string) {
+  const walletRepo = AppDataSource.getRepository(Wallet);
+
+  const wallet = await walletRepo.findOne({
+    where: { wallet_id: walletId },
+    relations: [
+      "network",
+      "agency",
+      "agency.manager",
+      "agency.manager.user",
+      "agency.agencyPersonals",
+      "agency.agencyPersonals.personal",
+      "agency.agencyPersonals.personal.user",
+    ],
+  });
+  if (!wallet) throw new Error("Wallet introuvable");
+
+  // 🔐 Vérification des droits selon le rôle
+  let authorized = false;
+
+  if (role === "manager" && wallet.agency.manager.user.user_id === userId) {
+    authorized = true;
+  }
+
+  if (role === "personal") {
+    authorized = wallet.agency.agencyPersonals.some(
+      (ap) => ap.personal.user.user_id === userId
+    );
+  }
+
+  if (!authorized) {
+    throw new Error("Accès refusé : ce wallet ne vous appartient pas");
+  }
+
+  wallet.balance = 0;
+  await walletRepo.save(wallet);
+
+  return {
+    id: wallet.wallet_id,
+    balance: wallet.balance,
+    network: wallet.network.name,
+  };
+},
+
+  /**
    * Récupérer tous les wallets du manager connecté, regroupés par agence
    */
   async getWalletsByManager(userId: number) {

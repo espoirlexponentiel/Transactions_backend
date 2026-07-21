@@ -23,4 +23,13 @@ router.get(
   }
 );
 
+router.post(
+  "/wallet/:walletId/reset",
+  authMiddleware,
+  requireRole(["manager", "personal"]),
+  (req, res) => {
+    const typedReq = req as AuthRequest<any, { walletId: string }>;
+    return WalletsController.resetOne(typedReq, res);
+  }
+);
 export default router;
