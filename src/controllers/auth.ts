@@ -44,49 +44,32 @@ async login(req: AuthRequest, res: Response) {
   try {
     const userRepo = AppDataSource.getRepository(User);
     const personalRepo = AppDataSource.getRepository(Personal);
-
     const { phone, password } = req.body;
 
-    const user = await userRepo.findOne({
-      where: { phone },
-    });
-
+    const user = await userRepo.findOne({ where: { phone } });
     if (!user) {
-      return res.status(404).json({
-        error: "Utilisateur introuvable",
-      });
+      return res.status(404).json({ error: "Utilisateur introuvable" });
     }
 
-    const valid = await AuthService.comparePassword(
-      password,
-      user.password_hash
-    );
-
+    const valid = await AuthService.comparePassword(password, user.password_hash);
     if (!valid) {
-      return res.status(401).json({
-        error: "Mot de passe incorrect",
-      });
+      return res.status(401).json({ error: "Mot de passe incorrect" });
     }
 
-    let agencyId: number | undefined;
-    let agency: any = undefined;
+    // 🔹 Si l'utilisateur est un "personal", on récupère son agence assignée
+    let agencyId: number | undefined = undefined;
+    let agencyName: string | undefined = undefined;
 
     if (user.role === "personal") {
       const personal = await personalRepo.findOne({
-        where: {
-          user: {
-            user_id: user.user_id,
-          },
-        },
-        relations: [
-          "agencyPersonals",
-          "agencyPersonals.agency",
-        ],
+        where: { user: { user_id: user.user_id } },
+        relations: ["agencyPersonals", "agencyPersonals.agency"],
       });
 
       if (personal && personal.agencyPersonals?.length > 0) {
-        agency = personal.agencyPersonals[0].agency;
+        const agency = personal.agencyPersonals[0].agency;
         agencyId = agency.agency_id;
+        agencyName = agency.name;
       }
     }
 
@@ -102,13 +85,10 @@ async login(req: AuthRequest, res: Response) {
       role: user.role,
       name: user.firstName,
       agencyId,
-      agency,
+      agency: agencyId ? { agency_id: agencyId, name: agencyName } : null,
     });
-
   } catch (err: any) {
-    return res.status(500).json({
-      error: err.message,
-    });
+    return res.status(500).json({ error: err.message });
   }
 },
 
